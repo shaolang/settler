@@ -21,7 +21,7 @@
         is-usd-holiday      (some #{date} (:holidays usd-config))]
     (cond
      (or is-weekend
-         (and is-ccy-holiday (not is-usd-holiday))
+         (and is-ccy-holiday (not= currency "USD"))
          (and is-usd-holiday (zero? days-to-add)))
      (recur currency date (inc days-to-add) usd-config config)
 

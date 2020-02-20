@@ -102,19 +102,19 @@
 
 
 (deftest weekends-defaults-to-sats-and-suns-if-not-setup
-  (let [trade-date  (LocalDate/of 2015 1 1)   ;; Thursday
+  (let [trade-date  (LocalDate/of 2015 1 1)         ;; Thursday
         spot-date   (settler/spot nil nil trade-date "GHI" "JKL")
         spot-day    (.getDayOfWeek spot-date)]
-    (is (= spot-date (LocalDate/of 2015 1 5)))))    ;; Tuesday
+    (is (= spot-date (LocalDate/of 2015 1 5)))))    ;; Monday
 
 
 (deftest USD-holidays-on-T+1-considered-good
-  (let [trade-date  (LocalDate/of 2023 7 3)     ;; Monday
+  (let [trade-date  (LocalDate/of 2023 7 3)         ;; Monday
         config      {"USD" {:holidays #{(LocalDate/of 2023 7 4)}}}
         spot-lags   {#{"USD" "CAD"} 1}
         spot-fn     (partial settler/spot spot-lags config trade-date)]
     (testing "spot-lag is 2"
-      (is (= (LocalDate/of 2023 7 5)
+      (is (= (LocalDate/of 2023 7 5)                ;; Wednesday
              (spot-fn "USD" "JPY"))))
 
     (testing "spot-lag is 1"
@@ -122,12 +122,22 @@
              (spot-fn "USD" "CAD"))))))
 
 
-(deftest non-USD-holidays-on-T+1-considered-not-good
-  (let [trade-date  (LocalDate/of 2019 4 30)     ;; Tuesday
+(deftest non-USD-holidays-on-T+1-considered-not-good-biz-day
+  (let [trade-date  (LocalDate/of 2019 4 30)        ;; Tuesday
         spot-date   (settler/spot nil
                                   {"ABC" {:holidays #{(LocalDate/of 2019 5 1)}}
                                    "XYZ" nil}
                                   trade-date
                                   "ABC"
                                   "XYZ")]
-    (is (= spot-date (LocalDate/of 2019 5 3)))))
+    (is (= spot-date (LocalDate/of 2019 5 3)))))    ;; Friday
+
+
+(deftest USD-and-non-USD-holidays-on-T+1-considered-not-good-biz-day
+  (let [trade-date  (LocalDate/of 2023 7 3)         ;; Monday
+        holiday     (LocalDate/of 2023 7 4)
+        config      {"USD" {:holidays #{holiday}}
+                     "SGD" {:holidays #{holiday}}}
+        spot-date   (settler/spot nil config trade-date "USD" "SGD")]
+    (is (= (LocalDate/of 2023 7 6)
+           spot-date))))
