@@ -33,7 +33,7 @@
 ;;;;;;;;;;;;;
 ;; properties
 
-(defspec nothing-falls-on-weekends
+(defspec spot-date-never-falls-on-weekends
   (for-all [configs     (gen/map gen-currency gen-config {:num-elements 2})
             spot-lag    (gen/choose 0 3)
             trade-date  gen-date]
@@ -46,7 +46,7 @@
       (not (some #{spot-day} all-weekends)))))
 
 
-(defspec nothing-falls-on-holidays
+(defspec spot-dates-never-falls-on-holidays
   (for-all [configs     (gen/map gen-currency gen-config {:num-elements 2})
             spot-lag    (gen/choose 0 3)
             trade-date  gen-date]
@@ -57,7 +57,7 @@
            (seq all-holidays)))))
 
 
-(defspec nothing-falls-on-usd-holidays-even-for-crosses
+(defspec spot-date-never-falls-on-usd-holidays-even-for-crosses
   (for-all [ccys          (gen/set gen-currency {:num-elements 2})
             spot-lag      (gen/choose 0 3)
             trade-date    gen-date
