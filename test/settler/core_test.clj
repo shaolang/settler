@@ -18,9 +18,17 @@
 (def gen-date (gen/fmap #(.plusDays (LocalDate/now) %) gen/small-integer))
 
 
-(def gen-config (gen/fmap #(hash-map :weekends (apply hash-set %))
-                          (gen/set (gen/elements (DayOfWeek/values))
-                                   {:min-elements 2 :max-elements 3})))
+(def gen-holidays (gen/set (gen/fmap #(.plusDays (LocalDate/now) %)
+                                     (gen/choose -10 10))
+                           {:min-elements 1 :max-elements 20}))
+
+
+(def gen-config (gen/fmap (fn [[weekends holidays]]
+                            (hash-map :weekends (apply hash-set weekends)
+                                      :holidays holidays))
+                          (gen/tuple (gen/set (gen/elements (DayOfWeek/values))
+                                              {:min-elements 2 :max-elements 3})
+                                     gen-holidays)))
 
 ;;;;;;;;;;;;;
 ;; properties
@@ -36,6 +44,17 @@
           spot-date     (settler/spot spot-lag-map configs trade-date ccy1 ccy2)
           spot-day      (.getDayOfWeek spot-date)]
       (not (some #{spot-day} all-weekends)))))
+
+
+(defspec nothing-falls-on-holidays
+  (for-all [configs     (gen/map gen-currency gen-config {:num-elements 2})
+            spot-lag    (gen/choose 0 3)
+            trade-date  gen-date]
+    (let [all-holidays  (into #{} (mapcat :holidays (vals configs)))
+          [ccy1 ccy2]   (keys configs)
+          spot-date     (settler/spot nil configs trade-date ccy1 ccy2)]
+      (and (not (some #{spot-date} all-holidays))
+           (seq all-holidays)))))
 
 ;;;;;;;;;;
 ;; helpers
@@ -73,3 +92,28 @@
         spot-date   (settler/spot nil nil trade-date "GHI" "JKL")
         spot-day    (.getDayOfWeek spot-date)]
     (is (= spot-date (LocalDate/of 2015 1 5)))))    ;; Tuesday
+
+
+(deftest USD-holidays-on-T+1-considered-good
+  (let [trade-date  (LocalDate/of 2023 7 3)     ;; Monday
+        config      {"USD" {:holidays #{(LocalDate/of 2023 7 4)}}}
+        spot-lags   {#{"USD" "CAD"} 1}
+        spot-fn     (partial settler/spot spot-lags config trade-date)]
+    (testing "spot-lag is 2"
+      (is (= (spot-fn "USD" "JPY")
+             (LocalDate/of 2023 7 5))))
+
+    (testing "spot-lag is 1"
+      (is (= (spot-fn "USD" "CAD")
+             (LocalDate/of 2023 7 5))))))
+
+
+(deftest non-USD-holidays-on-T+1-considered-not-good
+  (let [trade-date  (LocalDate/of 2019 4 30)     ;; Tuesday
+        spot-date   (settler/spot nil
+                                  {"ABC" {:holidays #{(LocalDate/of 2019 5 1)}}
+                                   "XYZ" nil}
+                                  trade-date
+                                  "ABC"
+                                  "XYZ")]
+    (is (= spot-date (LocalDate/of 2019 5 3)))))

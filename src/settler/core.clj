@@ -6,19 +6,41 @@
 (defonce ^:private STANDARD-SPOT-LAG 2)
 
 
-(defn- to-next-biz-day [weekends date days-to-add]
-  (let [new-date (.plusDays date days-to-add)]
-    (if (some #{(.getDayOfWeek new-date)} weekends)
-      (recur weekends new-date 1)
-      new-date)))
+(defn- max [[d1 d2]]
+  (if (.isAfter d1 d2) d1 d2))
+
+
+(defn- next-biz-day [currency date days-to-add
+                     {:keys [weekends holidays] :as config
+                      :or {weekends STANDARD-WEEKEND}}]
+  (let [[date days-to-add]  (if (pos? days-to-add)
+                              [(.plusDays date 1) (dec days-to-add)]
+                              [date days-to-add])
+        is-weekend          (some #{(.getDayOfWeek date)} weekends)
+        is-holiday          (some #{date} holidays)]
+    (cond
+     (and (not is-weekend) is-holiday (= currency "USD") (= days-to-add 1))
+     (recur currency date days-to-add config)
+
+     (or is-weekend is-holiday)
+     (recur currency date (inc days-to-add) config)
+
+     (pos? days-to-add)
+     (recur currency date days-to-add config)
+
+     :else
+     date)))
 
 
 (defn spot [spot-lags configs trade-date ccy1 ccy2]
-  (let [pair          #{ccy1 ccy2}
-        spot-lag      (get spot-lags pair STANDARD-SPOT-LAG)
-        ccy1-weekends (get-in configs [ccy1 :weekends] STANDARD-WEEKEND)
-        ccy2-weekends (get-in configs [ccy2 :weekends] STANDARD-WEEKEND)
-        spot1         (to-next-biz-day ccy1-weekends trade-date spot-lag)
-        spot2         (to-next-biz-day ccy2-weekends trade-date spot-lag)
-        candidate     (if (.isAfter spot1 spot2) spot1 spot2)]
-    (to-next-biz-day (set/union ccy1-weekends ccy2-weekends) candidate 0)))
+  (let [pair        #{ccy1 ccy2}
+        spot-lag    (get spot-lags pair STANDARD-SPOT-LAG)
+        spots       (map #(next-biz-day % trade-date spot-lag (get configs %))
+                         pair)
+        ccy-configs (map #(get configs %) pair)
+        candidate   (max spots)]
+    (next-biz-day nil
+                  candidate
+                  0
+                  {:weekends (apply set/union (map :weekends ccy-configs))
+                   :holidays (apply set/union (map :holidays ccy-configs))})))
