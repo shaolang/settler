@@ -22,7 +22,7 @@
     (cond
      (or is-weekend
          (and is-ccy-holiday (not is-usd-holiday))
-         (and (not is-weekend) is-usd-holiday (zero? days-to-add)))
+         (and is-usd-holiday (zero? days-to-add)))
      (recur currency date (inc days-to-add) usd-config config)
 
      (pos? days-to-add)
