@@ -56,6 +56,20 @@
       (and (not (some #{spot-date} all-holidays))
            (seq all-holidays)))))
 
+
+(defspec nothing-falls-on-usd-holidays-even-for-crosses
+  (for-all [ccys          (gen/set gen-currency {:num-elements 2})
+            spot-lag      (gen/choose 0 3)
+            trade-date    gen-date
+            usd-holidays  gen-holidays]
+    (let [[ccy1 ccy2]   (vec ccys)
+          spot-lags     {ccys spot-lag}
+          configs       (->  ccys
+                            (zipmap (repeat nil))
+                            (assoc "USD" {:holidays usd-holidays}))
+          spot-date     (settler/spot spot-lags configs trade-date ccy1 ccy2)]
+      (not (some #{spot-date} usd-holidays)))))
+
 ;;;;;;;;;;
 ;; helpers
 
@@ -100,12 +114,12 @@
         spot-lags   {#{"USD" "CAD"} 1}
         spot-fn     (partial settler/spot spot-lags config trade-date)]
     (testing "spot-lag is 2"
-      (is (= (spot-fn "USD" "JPY")
-             (LocalDate/of 2023 7 5))))
+      (is (= (LocalDate/of 2023 7 5)
+             (spot-fn "USD" "JPY"))))
 
     (testing "spot-lag is 1"
-      (is (= (spot-fn "USD" "CAD")
-             (LocalDate/of 2023 7 5))))))
+      (is (= (LocalDate/of 2023 7 5)
+             (spot-fn "USD" "CAD"))))))
 
 
 (deftest non-USD-holidays-on-T+1-considered-not-good
