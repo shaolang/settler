@@ -30,6 +30,13 @@
                                               {:min-elements 2 :max-elements 3})
                                      gen-holidays)))
 
+(def gen-tenor (gen/let [tenor-unit     (gen/elements ["W" "M" "Y"])
+                         tenor-duration (case tenor-unit
+                                          "W"  (gen/choose 1 3)
+                                          "M"  (gen/choose 1 11)
+                                          (gen/choose 1 2))]
+                 (apply str tenor-duration tenor-unit)))
+
 ;;;;;;;;;;;;;
 ;; properties
 
@@ -69,6 +76,18 @@
                             (assoc "USD" {:holidays usd-holidays}))
           spot-date     (settler/spot spot-lags configs trade-date ccy1 ccy2)]
       (not (some #{spot-date} usd-holidays)))))
+
+
+(defspec forward-value-dates-never-falls-on-weekends
+  (for-all [configs     (gen/map gen-currency gen-config {:num-elements 2})
+            tenor       gen-tenor
+            trade-date  gen-date]
+    (let [[ccy1 ccy2]   (keys configs)
+          all-weekends  (into #{} (mapcat :weekends (vals configs)))
+          vdate         (settler/value-date tenor nil configs trade-date
+                                          ccy1 ccy2)
+          vday        (.getDayOfWeek vdate)]
+      (is (not (some #{vday} all-weekends))))))
 
 ;;;;;;;;;;
 ;; helpers

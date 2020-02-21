@@ -1,9 +1,27 @@
 (ns settler.core
   (:require [clojure.set :as set])
-  (:import [java.time DayOfWeek]))
+  (:import [java.time DayOfWeek]
+           [java.time.temporal ChronoField TemporalField]))
 
 (defonce ^:private STANDARD-WEEKEND #{DayOfWeek/SATURDAY DayOfWeek/SUNDAY})
 (defonce ^:private STANDARD-SPOT-LAG 2)
+(defonce ^:private TENORS
+  {"1W"   {:n  1 :unit ChronoField/ALIGNED_WEEK_OF_YEAR}
+   "2W"   {:n  2 :unit ChronoField/ALIGNED_WEEK_OF_YEAR}
+   "3W"   {:n  3 :unit ChronoField/ALIGNED_WEEK_OF_YEAR}
+   "1M"   {:n  1 :unit ChronoField/MONTH_OF_YEAR}
+   "2M"   {:n  2 :unit ChronoField/MONTH_OF_YEAR}
+   "3M"   {:n  3 :unit ChronoField/MONTH_OF_YEAR}
+   "4M"   {:n  4 :unit ChronoField/MONTH_OF_YEAR}
+   "5M"   {:n  5 :unit ChronoField/MONTH_OF_YEAR}
+   "6M"   {:n  6 :unit ChronoField/MONTH_OF_YEAR}
+   "7M"   {:n  7 :unit ChronoField/MONTH_OF_YEAR}
+   "8M"   {:n  8 :unit ChronoField/MONTH_OF_YEAR}
+   "9M"   {:n  9 :unit ChronoField/MONTH_OF_YEAR}
+   "10M"  {:n 10 :unit ChronoField/MONTH_OF_YEAR}
+   "11M"  {:n 11 :unit ChronoField/MONTH_OF_YEAR}
+   "1Y"   {:n  1 :unit ChronoField/YEAR}
+   "2Y"   {:n  2 :unit ChronoField/YEAR}})
 
 
 (defn- latest-date [[d1 d2]]
@@ -45,5 +63,15 @@
                   candidate
                   0
                   usd-config
+                  {:weekends (apply set/union (map :weekends ccy-configs))
+                   :holidays (apply set/union (map :holidays ccy-configs))})))
+
+
+(defn value-date [tenor spot-lags configs trade-date ccy1 ccy2]
+  (let [{:keys [n unit]}  (get TENORS tenor)
+        spot-date         (spot spot-lags configs trade-date ccy1 ccy2)
+        ccy-configs       (map #(get configs %) [ccy1 ccy2])
+        candidate         (.with spot-date unit (long n))]
+    (next-biz-day nil candidate 0 (get configs "USD")
                   {:weekends (apply set/union (map :weekends ccy-configs))
                    :holidays (apply set/union (map :holidays ccy-configs))})))
