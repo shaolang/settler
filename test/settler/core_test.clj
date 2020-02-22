@@ -85,9 +85,9 @@
     (let [[ccy1 ccy2]   (keys configs)
           all-weekends  (into #{} (mapcat :weekends (vals configs)))
           vdate         (settler/value-date tenor nil configs trade-date
-                                          ccy1 ccy2)
+                                            ccy1 ccy2)
           vday        (.getDayOfWeek vdate)]
-      (is (not (some #{vday} all-weekends))))))
+      (not (some #{vday} all-weekends)))))
 
 ;;;;;;;;;;
 ;; helpers
