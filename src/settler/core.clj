@@ -5,23 +5,9 @@
 
 (defonce ^:private STANDARD-WEEKEND #{DayOfWeek/SATURDAY DayOfWeek/SUNDAY})
 (defonce ^:private STANDARD-SPOT-LAG 2)
-(defonce ^:private TENORS
-  {"1W"   {:n  1 :unit ChronoUnit/WEEKS}
-   "2W"   {:n  2 :unit ChronoUnit/WEEKS}
-   "3W"   {:n  3 :unit ChronoUnit/WEEKS}
-   "1M"   {:n  1 :unit ChronoUnit/MONTHS}
-   "2M"   {:n  2 :unit ChronoUnit/MONTHS}
-   "3M"   {:n  3 :unit ChronoUnit/MONTHS}
-   "4M"   {:n  4 :unit ChronoUnit/MONTHS}
-   "5M"   {:n  5 :unit ChronoUnit/MONTHS}
-   "6M"   {:n  6 :unit ChronoUnit/MONTHS}
-   "7M"   {:n  7 :unit ChronoUnit/MONTHS}
-   "8M"   {:n  8 :unit ChronoUnit/MONTHS}
-   "9M"   {:n  9 :unit ChronoUnit/MONTHS}
-   "10M"  {:n 10 :unit ChronoUnit/MONTHS}
-   "11M"  {:n 11 :unit ChronoUnit/MONTHS}
-   "1Y"   {:n  1 :unit ChronoUnit/YEARS}
-   "2Y"   {:n  2 :unit ChronoUnit/YEARS}})
+(defonce ^:private UNITS {"W" ChronoUnit/WEEKS
+                          "M" ChronoUnit/MONTHS
+                          "Y" ChronoUnit/YEARS})
 
 
 (defn- latest-date [[d1 d2]]
@@ -50,6 +36,12 @@
      date)))
 
 
+(defn tenor [x]
+  (let [[_ n unit] (re-matches #"^(\d+)(\w)$" x)]
+    {:n (Long/parseLong n)
+     :unit (get UNITS unit)}))
+
+
 (defn spot [spot-lags configs trade-date ccy1 ccy2]
   (let [pair        #{ccy1 ccy2}
         spot-lag    (get spot-lags pair STANDARD-SPOT-LAG)
@@ -67,8 +59,8 @@
                    :holidays (apply set/union (map :holidays ccy-configs))})))
 
 
-(defn value-date [tenor spot-lags configs trade-date ccy1 ccy2]
-  (let [{:keys [n unit]}  (get TENORS tenor)
+(defn value-date [tenor-str spot-lags configs trade-date ccy1 ccy2]
+  (let [{:keys [n unit]}  (tenor tenor-str)
         spot-date         (spot spot-lags configs trade-date ccy1 ccy2)
         ccy-configs       (map #(get configs %) [ccy1 ccy2])
         candidate         (.plus spot-date n unit)]

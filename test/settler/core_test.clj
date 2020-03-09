@@ -160,3 +160,15 @@
         spot-date   (settler/spot nil config trade-date "USD" "SGD")]
     (is (= (LocalDate/of 2023 7 6)
            spot-date))))
+
+
+(deftest tenor-returns-map-of-n-chronounits
+  (let [units {"W" ChronoUnit/WEEKS
+               "M" ChronoUnit/MONTHS
+               "Y" ChronoUnit/YEARS}]
+  (doseq [[n unit] (for [n    (range 1 12)
+                         unit ["W" "M" "Y"]]
+                     [n unit])]
+    (testing (str "tenor " n unit)
+      (is (= {:n n :unit (get units unit)}
+             (settler/tenor (str n unit))))))))
