@@ -18,17 +18,25 @@
 (def gen-date (gen/fmap #(.plusDays (LocalDate/now) %) gen/small-integer))
 
 
-(def gen-holidays (gen/set (gen/fmap #(.plusDays (LocalDate/now) %)
-                                     (gen/choose -10 10))
-                           {:min-elements 1 :max-elements 20}))
+(defn gen-holidays
+  ([] (gen-holidays nil))
+  ([{:keys [start-date] :or {start-date (LocalDate/now)}}]
+   (gen/set (gen/fmap #(.plusDays start-date %) (gen/choose -10 10))
+            {:min-elements 1 :max-elements 20})))
 
 
-(def gen-config (gen/fmap (fn [[weekends holidays]]
-                            (hash-map :weekends (apply hash-set weekends)
-                                      :holidays holidays))
-                          (gen/tuple (gen/set (gen/elements (DayOfWeek/values))
-                                              {:min-elements 2 :max-elements 3})
-                                     gen-holidays)))
+(def ^:private gen-weekends (gen/set (gen/elements (DayOfWeek/values))
+                                     {:min-elements 2 :max-elements 3}))
+
+(defn gen-config
+  ([] (gen-config nil))
+  ([holiday-opts]
+   (gen/fmap (fn [[weekends holidays]]
+               (hash-map :weekends (apply hash-set weekends)
+                         :holidays holidays))
+             (gen/tuple gen-weekends
+                        (gen-holidays holiday-opts)))))
+
 
 (def gen-tenor (gen/let [tenor-unit     (gen/elements ["W" "M" "Y"])
                          tenor-duration (case tenor-unit
@@ -41,7 +49,7 @@
 ;; properties
 
 (defspec spot-date-never-falls-on-weekends
-  (for-all [configs     (gen/map gen-currency gen-config {:num-elements 2})
+  (for-all [configs     (gen/map gen-currency (gen-config) {:num-elements 2})
             spot-lag    (gen/choose 0 3)
             trade-date  gen-date]
     (let [all-weekends  (into #{} (mapcat :weekends (vals configs)))
@@ -54,7 +62,7 @@
 
 
 (defspec spot-dates-never-falls-on-holidays
-  (for-all [configs     (gen/map gen-currency gen-config {:num-elements 2})
+  (for-all [configs     (gen/map gen-currency (gen-config) {:num-elements 2})
             spot-lag    (gen/choose 0 3)
             trade-date  gen-date]
     (let [all-holidays  (into #{} (mapcat :holidays (vals configs)))
@@ -68,7 +76,7 @@
   (for-all [ccys          (gen/set gen-currency {:num-elements 2})
             spot-lag      (gen/choose 0 3)
             trade-date    gen-date
-            usd-holidays  gen-holidays]
+            usd-holidays  (gen-holidays)]
     (let [[ccy1 ccy2]   (vec ccys)
           spot-lags     {ccys spot-lag}
           configs       (->  ccys
@@ -79,10 +87,20 @@
 
 
 (defspec forward-value-dates-never-falls-on-weekends
-  (for-all [configs     (gen/map gen-currency gen-config {:num-elements 2})
-            tenor       gen-tenor
-            trade-date  gen-date]
-    (let [[ccy1 ccy2]   (keys configs)
+  (for-all [params (gen/let [tenor       gen-tenor
+                             trade-date  gen-date
+                             fwd-date    (gen/return
+                                          (let [{:keys [n unit]}
+                                                (settler/tenor tenor)]
+                                            (.plus trade-date (long n) unit)))
+                             configs (gen/map gen-currency
+                                              (gen-config {:start-date fwd-date})
+                                              {:num-elements 2})]
+                     {:tenor tenor
+                      :trade-date trade-date
+                      :configs configs})]
+    (let [{:keys [configs tenor trade-date]} params
+          [ccy1 ccy2]   (keys configs)
           all-weekends  (into #{} (mapcat :weekends (vals configs)))
           vdate         (settler/value-date tenor nil configs trade-date
                                             ccy1 ccy2)
