@@ -190,3 +190,19 @@
     (testing (str "tenor " n unit)
       (is (= {:n n :unit (get units unit)}
              (settler/tenor (str n unit))))))))
+
+
+(deftest forward-value-dates-are-always-between-two-chrono-units
+  (let [units {"W" ChronoUnit/WEEKS
+               "M" ChronoUnit/MONTHS
+               "Y" ChronoUnit/YEARS}]
+    (doseq [[[start end] unit-str] (for [start-end  (partition 2 1 (range 1 14))
+                                         unit-str   (keys units)]
+                                     [start-end unit-str])]
+      (testing (str "date must between " start unit-str " and " end unit-str)
+        (let [today (LocalDate/now)
+              unit  (get units unit-str)
+              vdate (settler/value-date (str start unit-str) nil nil today
+                                        "ABC" "XYZ")]
+          (is (and (.isAfter vdate  (.plus today start unit))
+                   (.isBefore vdate (.plus today end unit)))))))))
