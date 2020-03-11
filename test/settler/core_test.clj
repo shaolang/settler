@@ -87,25 +87,36 @@
 
 
 (defspec forward-value-dates-never-falls-on-weekends
-  (for-all [params (gen/let [tenor       gen-tenor
-                             trade-date  gen-date
-                             fwd-date    (gen/return
-                                          (let [{:keys [n unit]}
-                                                (settler/tenor tenor)]
-                                            (.plus trade-date (long n) unit)))
-                             configs (gen/map gen-currency
-                                              (gen-config {:start-date fwd-date})
-                                              {:num-elements 2})]
-                     {:tenor tenor
-                      :trade-date trade-date
-                      :configs configs})]
-    (let [{:keys [configs tenor trade-date]} params
-          [ccy1 ccy2]   (keys configs)
+  (for-all [tenor       gen-tenor
+            trade-date  gen-date
+            configs     (gen/map gen-currency (gen-config) {:num-elements 2})]
+    (let [[ccy1 ccy2]   (keys configs)
           all-weekends  (into #{} (mapcat :weekends (vals configs)))
           vdate         (settler/value-date tenor nil configs trade-date
                                             ccy1 ccy2)
           vday        (.getDayOfWeek vdate)]
       (not (some #{vday} all-weekends)))))
+
+
+(defspec forward-value-date-never-falls-on-holidays
+  (for-all [params (gen/let [tenor        gen-tenor
+                             trade-date   gen-date
+                             fwd-date     (gen/return
+                                           (let [{:keys [n unit]}
+                                                 (settler/tenor tenor)]
+                                             (.plus trade-date n unit)))
+                             configs      (gen/map gen-currency
+                                                   (gen-config {:start-date fwd-date})
+                                                   {:num-elements 2})]
+                     {:tenor      tenor
+                      :trade-date trade-date
+                      :configs    configs})]
+    (let [{:keys [tenor trade-date configs]} params
+          [ccy1 ccy2]   (keys configs)
+          all-holidays  (into #{} (mapcat :holidays (vals configs)))
+          vdate         (settler/value-date tenor nil configs trade-date
+                                            ccy1 ccy2)]
+      (not (some #{vdate} all-holidays)))))
 
 ;;;;;;;;;;
 ;; helpers
