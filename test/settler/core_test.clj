@@ -217,3 +217,10 @@
                                         "ABC" "XYZ")]
           (is (and (.isAfter vdate  (.plus today start unit))
                    (.isBefore vdate (.plus today end unit)))))))))
+
+(deftest forward-value-never-falls-on-weekends-when-configs-for-weekends-not-given
+  (let [trade-date (LocalDate/of 2020 1 6)    ; Mon -> spot 2020-01-08 (Wed)
+        value-date (settler/value-date "1M" nil nil trade-date
+                                       "ABC" "XYZ") ; 2020-02-10 Mon, 8 Feb is Sat
+        vday        (.getDayOfWeek value-date)]
+    (is (not (some #{vday} #{DayOfWeek/SATURDAY DayOfWeek/SUNDAY})))))

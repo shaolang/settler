@@ -15,11 +15,11 @@
 
 
 (defn- next-biz-day [currency date days-to-add usd-config
-                     {:keys [weekends holidays] :as config
-                      :or {weekends STANDARD-WEEKEND}}]
+                     {:keys [weekends holidays] :as config}]
   (let [[date days-to-add]  (if (pos? days-to-add)
                               [(.plusDays date 1) (dec days-to-add)]
                               [date days-to-add])
+        weekends            (if weekends weekends STANDARD-WEEKEND)
         is-weekend          (some #{(.getDayOfWeek date)} weekends)
         is-ccy-holiday      (some #{date} holidays)
         is-usd-holiday      (some #{date} (:holidays usd-config))]
