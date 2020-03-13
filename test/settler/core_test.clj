@@ -224,3 +224,48 @@
                                        "ABC" "XYZ") ; 2020-02-10 Mon, 8 Feb is Sat
         vday        (.getDayOfWeek value-date)]
     (is (not (some #{vday} #{DayOfWeek/SATURDAY DayOfWeek/SUNDAY})))))
+
+
+(deftest forward-value-dates-falls-on-last-biz-day-when-spot-also-on-last-biz-day
+  (doseq [[trade-date holidays tenor expected]
+          [[(LocalDate/of 2020 1 29)    ;; trade -> Wed; spot -> Fri (31 Jan)
+            nil
+            "1M"
+            (LocalDate/of 2020 2 28)]   ;; Fri
+           [(LocalDate/of 2020 2 26)    ;; trade -> Wed; spot -> Fri (28 Feb)
+            nil
+            "1M"
+            (LocalDate/of 2020 3 31)]   ;; Tue
+           [(LocalDate/of 2020 2 26)    ;; trade -> Wed; spot -> Fri (28 Feb)
+            nil
+            "3M"
+            (LocalDate/of 2020 5 29)]   ;; Fri
+           [(LocalDate/of 2020 2 26)    ;; same scenario as above...
+            #{(LocalDate/of 2020 5 29)} ;; except 29 May is a holiday
+            "3M"
+            (LocalDate/of 2020 5 28)]
+          ]]
+    (testing (str tenor " from " trade-date)
+      (is (= expected
+             (settler/value-date tenor nil {"XYZ" {:holidays holidays}}
+                                 trade-date "ABC" "XYZ"))))))
+
+
+(deftest forward-value-dates-spill-to-next-month-when-spot-is-not-last-day-and-tenor-is-week
+  (is (= (LocalDate/of 2020 2 7)    ;; Fri
+         (settler/value-date "1W" nil nil (LocalDate/of 2020 1 29) ;; Wed
+                             "XYZ" "DEF")))
+
+  (is (= (LocalDate/of 2020 5 1)    ;; Fri
+         (settler/value-date "1W" nil nil (LocalDate/of 2020 4 22)  ;; Wed
+                             "ABC" "XYZ")))
+
+  (is (= (LocalDate/of 2020 6 1)    ;; Mon
+         (settler/value-date "3W" nil
+                             {"DEF" {:holidays #{(LocalDate/of 2020 5 29)}}} ;; Fri
+                             (LocalDate/of 2020 5 6)  ;; Wed
+                             "ABC" "DEF")))
+
+  (is (= (LocalDate/of 2021 7 30)     ;; Fri
+         (settler/value-date "1Y" nil nil (LocalDate/of 2020 7 29)  ;; Wed
+                             "PQR" "STU"))))

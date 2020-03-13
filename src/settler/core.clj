@@ -1,7 +1,7 @@
 (ns settler.core
   (:require [clojure.set :as set])
   (:import [java.time DayOfWeek]
-           [java.time.temporal ChronoUnit]))
+           [java.time.temporal ChronoUnit TemporalAdjusters]))
 
 (defonce ^:private STANDARD-WEEKEND #{DayOfWeek/SATURDAY DayOfWeek/SUNDAY})
 (defonce ^:private STANDARD-SPOT-LAG 2)
@@ -45,6 +45,19 @@
          date)))))
 
 
+(defn- last-biz-day-of-month? [date config]
+  (not= (.getMonth date)
+        (.getMonth (next-biz-day nil date 1 nil config))))
+
+
+(defn- prev-biz-day [date {:keys [weekends holidays]}]
+  (loop [date date]
+    (let [candidate (.minusDays date 1)]
+      (if (or (weekend? candidate weekends) (holiday? candidate holidays))
+        (recur candidate)
+        candidate))))
+
+
 (defn tenor [x]
   (let [[_ n unit] (re-matches #"^(\d+)(\w)$" x)]
     {:n (Long/parseLong n)
@@ -71,8 +84,17 @@
 (defn value-date [tenor-str spot-lags configs trade-date ccy1 ccy2]
   (let [{:keys [n unit]}  (tenor tenor-str)
         spot-date         (spot spot-lags configs trade-date ccy1 ccy2)
-        ccy-configs       (map #(get configs %) [ccy1 ccy2])
-        ccy-configs       {:weekends (apply set/union (map :weekends ccy-configs))
-                           :holidays (apply set/union (map :holidays ccy-configs))}
+        weekends          (apply set/union (map #(get-in configs [% :weekends])
+                                                [ccy1 ccy2 "USD"]))
+        weekends          (if weekends weekends STANDARD-WEEKEND)
+        holidays          (apply set/union (map #(get-in configs [% :holidays])
+                                                [ccy1 ccy2 "USD"]))
+        ccy-configs       {:weekends weekends :holidays holidays}
         candidate         (.plus spot-date n unit)]
-    (next-biz-day nil candidate 0 (get configs "USD") ccy-configs)))
+    (if (or (= unit ChronoUnit/WEEKS)
+            (not (last-biz-day-of-month? spot-date ccy-configs)))
+      (next-biz-day nil candidate 0 nil ccy-configs)
+      (let [candidate (.with candidate (TemporalAdjusters/lastDayOfMonth))]
+        (if (or (weekend? candidate weekends) (holiday? candidate holidays))
+          (prev-biz-day candidate ccy-configs)
+          candidate)))))
