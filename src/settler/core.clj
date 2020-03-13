@@ -14,26 +14,35 @@
   (if (.isAfter d1 d2) d1 d2))
 
 
+(defn- weekend? [date weekends]
+  (some #{(.getDayOfWeek date)} weekends))
+
+
+(defn- holiday? [date holidays]
+  (some #{date} holidays))
+
+
 (defn- next-biz-day [currency date days-to-add usd-config
                      {:keys [weekends holidays] :as config}]
-  (let [[date days-to-add]  (if (pos? days-to-add)
-                              [(.plusDays date 1) (dec days-to-add)]
-                              [date days-to-add])
-        weekends            (if weekends weekends STANDARD-WEEKEND)
-        is-weekend          (some #{(.getDayOfWeek date)} weekends)
-        is-ccy-holiday      (some #{date} holidays)
-        is-usd-holiday      (some #{date} (:holidays usd-config))]
-    (cond
-     (or is-weekend
-         (and is-ccy-holiday (not= currency "USD"))
-         (and is-usd-holiday (zero? days-to-add)))
-     (recur currency date (inc days-to-add) usd-config config)
+  (let [usd-holidays  (:holidays usd-config)
+        non-usd?      (not= currency "USD")
+        weekends      (if weekends weekends STANDARD-WEEKEND)]
+    (loop [date        date
+           days-to-add days-to-add]
+      (let [[date days-to-add]  (if (pos? days-to-add)
+                                  [(.plusDays date 1) (dec days-to-add)]
+                                  [date days-to-add])]
+        (cond
+         (or (weekend? date weekends)
+             (and non-usd? (holiday? date holidays))
+             (and (zero? days-to-add) (holiday? date usd-holidays)))
+         (recur date (inc days-to-add))
 
-     (pos? days-to-add)
-     (recur currency date days-to-add usd-config config)
+         (pos? days-to-add)
+         (recur date days-to-add)
 
-     :else
-     date)))
+         :else
+         date)))))
 
 
 (defn tenor [x]
@@ -63,7 +72,7 @@
   (let [{:keys [n unit]}  (tenor tenor-str)
         spot-date         (spot spot-lags configs trade-date ccy1 ccy2)
         ccy-configs       (map #(get configs %) [ccy1 ccy2])
+        ccy-configs       {:weekends (apply set/union (map :weekends ccy-configs))
+                           :holidays (apply set/union (map :holidays ccy-configs))}
         candidate         (.plus spot-date n unit)]
-    (next-biz-day nil candidate 0 (get configs "USD")
-                  {:weekends (apply set/union (map :weekends ccy-configs))
-                   :holidays (apply set/union (map :holidays ccy-configs))})))
+    (next-biz-day nil candidate 0 (get configs "USD") ccy-configs)))
