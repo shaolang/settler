@@ -92,7 +92,7 @@
             configs     (gen/map gen-currency (gen-config) {:num-elements 2})]
     (let [[ccy1 ccy2]   (keys configs)
           all-weekends  (into #{} (mapcat :weekends (vals configs)))
-          vdate         (settler/value-date tenor nil configs trade-date
+          vdate         (settler/value-date nil configs trade-date tenor
                                             ccy1 ccy2)
           vday        (.getDayOfWeek vdate)]
       (not (some #{vday} all-weekends)))))
@@ -114,7 +114,7 @@
     (let [{:keys [tenor trade-date configs]} params
           [ccy1 ccy2]   (keys configs)
           all-holidays  (into #{} (mapcat :holidays (vals configs)))
-          vdate         (settler/value-date tenor nil configs trade-date
+          vdate         (settler/value-date nil configs trade-date tenor
                                             ccy1 ccy2)]
       (not (some #{vdate} all-holidays)))))
 
@@ -151,8 +151,7 @@
 
 (deftest weekends-defaults-to-sats-and-suns-if-not-setup
   (let [trade-date  (LocalDate/of 2015 1 1)         ;; Thursday
-        spot-date   (settler/spot nil nil trade-date "GHI" "JKL")
-        spot-day    (.getDayOfWeek spot-date)]
+        spot-date   (settler/spot nil nil trade-date "GHI" "JKL")]
     (is (= spot-date (LocalDate/of 2015 1 5)))))    ;; Monday
 
 
@@ -213,14 +212,14 @@
       (testing (str "date must between " start unit-str " and " end unit-str)
         (let [today (LocalDate/now)
               unit  (get units unit-str)
-              vdate (settler/value-date (str start unit-str) nil nil today
+              vdate (settler/value-date nil nil today (str start unit-str)
                                         "ABC" "XYZ")]
           (is (and (.isAfter vdate  (.plus today start unit))
                    (.isBefore vdate (.plus today end unit)))))))))
 
 (deftest forward-value-never-falls-on-weekends-when-configs-for-weekends-not-given
   (let [trade-date (LocalDate/of 2020 1 6)    ; Mon -> spot 2020-01-08 (Wed)
-        value-date (settler/value-date "1M" nil nil trade-date
+        value-date (settler/value-date nil nil trade-date "1M"
                                        "ABC" "XYZ") ; 2020-02-10 Mon, 8 Feb is Sat
         vday        (.getDayOfWeek value-date)]
     (is (not (some #{vday} #{DayOfWeek/SATURDAY DayOfWeek/SUNDAY})))))
@@ -247,25 +246,25 @@
           ]]
     (testing (str tenor " from " trade-date)
       (is (= expected
-             (settler/value-date tenor nil {"XYZ" {:holidays holidays}}
-                                 trade-date "ABC" "XYZ"))))))
+             (settler/value-date nil {"XYZ" {:holidays holidays}} trade-date
+                                 tenor "ABC" "XYZ"))))))
 
 
 (deftest forward-value-dates-spill-to-next-month-when-spot-is-not-last-day-and-tenor-is-week
   (is (= (LocalDate/of 2020 2 7)    ;; Fri
-         (settler/value-date "1W" nil nil (LocalDate/of 2020 1 29) ;; Wed
-                             "XYZ" "DEF")))
+         (settler/value-date nil nil (LocalDate/of 2020 1 29) ;; Wed
+                             "1W" "XYZ" "DEF")))
 
   (is (= (LocalDate/of 2020 5 1)    ;; Fri
-         (settler/value-date "1W" nil nil (LocalDate/of 2020 4 22)  ;; Wed
-                             "ABC" "XYZ")))
+         (settler/value-date nil nil (LocalDate/of 2020 4 22)  ;; Wed
+                             "1W" "ABC" "XYZ")))
 
   (is (= (LocalDate/of 2020 6 1)    ;; Mon
-         (settler/value-date "3W" nil
+         (settler/value-date nil
                              {"DEF" {:holidays #{(LocalDate/of 2020 5 29)}}} ;; Fri
                              (LocalDate/of 2020 5 6)  ;; Wed
-                             "ABC" "DEF")))
+                             "3W" "ABC" "DEF")))
 
   (is (= (LocalDate/of 2021 7 30)     ;; Fri
-         (settler/value-date "1Y" nil nil (LocalDate/of 2020 7 29)  ;; Wed
-                             "PQR" "STU"))))
+         (settler/value-date nil nil (LocalDate/of 2020 7 29)  ;; Wed
+                             "1Y" "PQR" "STU"))))

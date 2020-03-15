@@ -22,32 +22,35 @@
   (some #{date} holidays))
 
 
-(defn- next-biz-day [currency date days-to-add usd-config
-                     {:keys [weekends holidays] :as config}]
-  (let [usd-holidays  (:holidays usd-config)
-        non-usd?      (not= currency "USD")
-        weekends      (if weekends weekends STANDARD-WEEKEND)]
-    (loop [date        date
-           days-to-add days-to-add]
-      (let [[date days-to-add]  (if (pos? days-to-add)
-                                  [(.plusDays date 1) (dec days-to-add)]
-                                  [date days-to-add])]
-        (cond
-         (or (weekend? date weekends)
-             (and non-usd? (holiday? date holidays))
-             (and (zero? days-to-add) (holiday? date usd-holidays)))
-         (recur date (inc days-to-add))
+(defn- next-biz-day
+  ([date days-to-add config]
+   (next-biz-day date days-to-add nil nil config))
 
-         (pos? days-to-add)
-         (recur date days-to-add)
+  ([date days-to-add currency usd-config {:keys [weekends holidays]}]
+   (let [usd-holidays  (:holidays usd-config)
+         non-usd?      (not= currency "USD")
+         weekends      (if weekends weekends STANDARD-WEEKEND)]
+     (loop [date        date
+            days-to-add days-to-add]
+       (let [[date days-to-add]  (if (pos? days-to-add)
+                                   [(.plusDays date 1) (dec days-to-add)]
+                                   [date days-to-add])]
+         (cond
+          (or (weekend? date weekends)
+              (and non-usd? (holiday? date holidays))
+              (and (zero? days-to-add) (holiday? date usd-holidays)))
+          (recur date (inc days-to-add))
 
-         :else
-         date)))))
+          (pos? days-to-add)
+          (recur date days-to-add)
+
+          :else
+          date))))))
 
 
 (defn- last-biz-day-of-month? [date config]
   (not= (.getMonth date)
-        (.getMonth (next-biz-day nil date 1 nil config))))
+        (.getMonth (next-biz-day date 1 config))))
 
 
 (defn- prev-biz-day [date {:keys [weekends holidays]}]
@@ -60,40 +63,40 @@
 
 (defn tenor [x]
   (let [[_ n unit] (re-matches #"^(\d+)(\w)$" x)]
-    {:n (Long/parseLong n)
-     :unit (get UNITS unit)}))
+    {:n     (Long/parseLong n)
+     :unit  (get UNITS unit)}))
 
 
 (defn spot [spot-lags configs trade-date ccy1 ccy2]
   (let [pair        #{ccy1 ccy2}
         spot-lag    (get spot-lags pair STANDARD-SPOT-LAG)
         usd-config  (get configs "USD")
-        spots       (map #(next-biz-day % trade-date spot-lag usd-config
+        spots       (map #(next-biz-day trade-date spot-lag % usd-config
                                         (get configs %))
                          pair)
         ccy-configs (map #(get configs %) pair)
         candidate   (latest-date spots)]
-    (next-biz-day nil
-                  candidate
+    (next-biz-day candidate
                   0
+                  nil
                   usd-config
                   {:weekends (apply set/union (map :weekends ccy-configs))
                    :holidays (apply set/union (map :holidays ccy-configs))})))
 
 
-(defn value-date [tenor-str spot-lags configs trade-date ccy1 ccy2]
-  (let [{:keys [n unit]}  (tenor tenor-str)
-        spot-date         (spot spot-lags configs trade-date ccy1 ccy2)
-        weekends          (apply set/union (map #(get-in configs [% :weekends])
+(defn value-date [spot-lags configs trade-date tenor-str ccy1 ccy2]
+  (let [weekends          (apply set/union (map #(get-in configs [% :weekends])
                                                 [ccy1 ccy2 "USD"]))
         weekends          (if weekends weekends STANDARD-WEEKEND)
         holidays          (apply set/union (map #(get-in configs [% :holidays])
                                                 [ccy1 ccy2 "USD"]))
         ccy-configs       {:weekends weekends :holidays holidays}
+        spot-date         (spot spot-lags configs trade-date ccy1 ccy2)
+        {:keys [n unit]}  (tenor tenor-str)
         candidate         (.plus spot-date n unit)]
     (if (or (= unit ChronoUnit/WEEKS)
             (not (last-biz-day-of-month? spot-date ccy-configs)))
-      (next-biz-day nil candidate 0 nil ccy-configs)
+      (next-biz-day candidate 0 ccy-configs)
       (let [candidate (.with candidate (TemporalAdjusters/lastDayOfMonth))]
         (if (or (weekend? candidate weekends) (holiday? candidate holidays))
           (prev-biz-day candidate ccy-configs)
