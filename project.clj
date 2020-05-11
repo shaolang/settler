@@ -4,7 +4,7 @@
   :license      {:name  "Apache Software License 2.0"
                  :url   "https://www.apache.org/licenses/LICENSE-2.0/"}
 
-  :dependencies [[org.clojure/clojure             "1.10.0"]
-                 [org.clojure/test.check          "0.10.0"]]
+  :profiles {:dev {:dependencies [[org.clojure/clojure      "1.10.0"]
+                                  [org.clojure/test.check   "0.10.0"]]}}
 
   :repl-options {:init-ns settler.core})
