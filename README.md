@@ -1,4 +1,4 @@
-# Settler
+# Settler [![Build Status](https://travis-ci.org/shaolang/settler.png)](https://travis-ci.org/shaolang/settler)
 
 FX value date calculation library.
 
